@@ -21,9 +21,7 @@ function Upload() {
     formData.append("file", file);
 
     try {
-      await api.post("/videos/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post("/videos/upload", formData);
       navigate("/feed");
     } catch (err) {
       setError(err.message);

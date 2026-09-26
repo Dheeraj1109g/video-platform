@@ -8,14 +8,35 @@ function VideoDetail() {
   const [comments, setComments] = useState([]);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
-
-  const loadData = () => {
-    api.get(`/videos/${id}`).then((res) => setVideo(res.data.data));
-    api.get(`/videos/${id}/comments`).then((res) => setComments(res.data.data));
-  };
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
+    let isMounted = true;
+
+    Promise.all([
+      api.get(`/videos/${id}`),
+      api.get(`/videos/${id}/comments`),
+    ])
+      .then(([videoRes, commentsRes]) => {
+        if (isMounted) {
+          setVideo(videoRes.data.data);
+          setComments(commentsRes.data.data || []);
+        }
+      })
+      .catch((err) => {
+        if (isMounted) {
+          setError(err.message || "Failed to load video details");
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   const handleComment = async (e) => {
@@ -24,13 +45,14 @@ function VideoDetail() {
     try {
       await api.post(`/videos/${id}/comment`, { text });
       setText("");
-      loadData();
+      api.get(`/videos/${id}/comments`).then((res) => setComments(res.data.data || []));
     } catch (err) {
       setError(err.message);
     }
   };
 
-  if (!video) return <p>Loading...</p>;
+  if (loading) return <p>Loading...</p>;
+  if (!video) return <p style={{ color: "red" }}>{error || "Video not found"}</p>;
 
   return (
     <div>
