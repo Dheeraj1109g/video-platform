@@ -11,6 +11,7 @@ from app.core.exceptions import (
     InvalidOTPException,
     UserNotVerifiedException,
     InvalidCredentialsException,
+    NotFoundException,
 )
 from app.utils.otp_utils import generate_otp, otp_expiry
 from app.utils.email_utils import send_otp_email
@@ -28,16 +29,22 @@ def signup(request: Request, payload: SignupRequest, db: Session = Depends(get_d
         (User.email == payload.email) | (User.username == payload.username)
     ).first()
     if existing:
-        raise UserAlreadyExistsException()
-
-    new_user = User(
-        email=payload.email,
-        username=payload.username,
-        hashed_password=hash_password(payload.password),
-        is_verified=False,
-    )
-    db.add(new_user)
-    db.commit()
+        if existing.is_verified:
+            raise UserAlreadyExistsException()
+        # Allow updating credentials and resending OTP if previously unverified
+        existing.email = payload.email
+        existing.username = payload.username
+        existing.hashed_password = hash_password(payload.password)
+        db.commit()
+    else:
+        new_user = User(
+            email=payload.email,
+            username=payload.username,
+            hashed_password=hash_password(payload.password),
+            is_verified=False,
+        )
+        db.add(new_user)
+        db.commit()
 
     otp_code = generate_otp()
     otp_entry = OTP(
@@ -67,7 +74,13 @@ def verify_otp(request: Request, payload: OTPVerifyRequest, db: Session = Depend
     if otp_entry.attempts >= 5:
         raise InvalidOTPException()
 
-    if datetime.now(timezone.utc) > otp_entry.expires_at.replace(tzinfo=timezone.utc):
+    expires_at = (
+        otp_entry.expires_at
+        if otp_entry.expires_at.tzinfo is not None
+        else otp_entry.expires_at.replace(tzinfo=timezone.utc)
+    )
+
+    if datetime.now(timezone.utc) > expires_at:
         raise InvalidOTPException()
 
     if otp_entry.otp_code != payload.otp_code:
@@ -76,6 +89,8 @@ def verify_otp(request: Request, payload: OTPVerifyRequest, db: Session = Depend
         raise InvalidOTPException()
 
     user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise NotFoundException("User")
     user.is_verified = True
     db.commit()
 

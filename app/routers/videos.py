@@ -8,8 +8,7 @@ from app.schemas.video_schema import VideoOut
 from app.core.responses import success_response
 from app.core.exceptions import FileValidationException, NotFoundException
 from app.utils.dependencies import get_current_user
-from app.core import cloudinary_config 
-  # noqa: F401 -- runs cloudinary.config() on import # noqa: F401 -- runs cloudinary.config() on import
+from app.core import cloudinary_config  # noqa: F401 -- runs cloudinary.config() on import
 
 router = APIRouter()
 
